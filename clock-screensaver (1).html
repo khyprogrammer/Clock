@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Clock Screensaver</title>
+
+<!-- PWA / Add to Home Screen -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Clock">
+<meta name="theme-color" content="#000000">
+
+<!-- Prevent tap highlight & text selection -->
+<meta name="format-detection" content="telephone=no">
+
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@200;300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: 'Outfit', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* ── Wallpaper layers ── */
+  .bg-layer {
+    position: fixed;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: opacity 2s ease-in-out;
+  }
+  #bg-a { z-index: 0; opacity: 1; }
+  #bg-b { z-index: 1; opacity: 0; }
+
+  /* ── Dark overlay ── */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    background: linear-gradient(
+      160deg,
+      rgba(0,0,0,0.55) 0%,
+      rgba(0,0,0,0.3) 50%,
+      rgba(0,0,0,0.6) 100%
+    );
+  }
+
+  /* ── Clock wrapper – moves via JS ── */
+  #stage {
+    position: fixed;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: transform 8s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  }
+
+  /* ── Time ── */
+  #time {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(100px, 22vw, 280px);
+    letter-spacing: 0.04em;
+    color: #fff;
+    line-height: 0.85;
+    text-shadow:
+      0 0 80px rgba(255,255,255,0.15),
+      0 4px 40px rgba(0,0,0,0.6);
+    user-select: none;
+  }
+
+  #time .colon {
+    display: inline-block;
+    animation: blink 1s step-start infinite;
+    margin: 0 -0.02em;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.15; }
+  }
+
+  /* ── Seconds bar ── */
+  #seconds-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+  }
+
+  #seconds-label {
+    font-size: 13px;
+    font-weight: 200;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+  }
+
+  #sec-bar-track {
+    width: clamp(180px, 28vw, 380px);
+    height: 2px;
+    background: rgba(255,255,255,0.18);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  #sec-bar-fill {
+    height: 100%;
+    background: #fff;
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.4s linear;
+  }
+
+  #seconds-num {
+    font-size: 13px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.5);
+    min-width: 22px;
+  }
+
+  /* ── Date + period ── */
+  #date-row {
+    margin-top: 28px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  #period {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(28px, 5vw, 56px);
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.1em;
+  }
+
+  #date {
+    font-size: clamp(13px, 2vw, 17px);
+    font-weight: 200;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+  }
+
+  /* ── Corner info ── */
+  #corner {
+    position: fixed;
+    bottom: 32px;
+    right: 36px;
+    z-index: 4;
+    text-align: right;
+    opacity: 0;
+    transition: opacity 0.6s;
+  }
+  body:hover #corner { opacity: 1; }
+
+  #corner .label {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.35);
+  }
+  #corner .value {
+    font-size: 13px;
+    color: rgba(255,255,255,0.55);
+    font-weight: 300;
+  }
+
+  /* ── Wallpaper counter ── */
+  #wp-badge {
+    position: fixed;
+    bottom: 32px;
+    left: 36px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.6s;
+  }
+  body:hover #wp-badge { opacity: 1; }
+
+  #wp-ring {
+    width: 28px; height: 28px;
+    transform: rotate(-90deg);
+  }
+  #wp-ring circle {
+    fill: none;
+    stroke: rgba(255,255,255,0.2);
+    stroke-width: 2.5;
+  }
+  #wp-ring .progress {
+    stroke: rgba(255,255,255,0.7);
+    stroke-linecap: round;
+    stroke-dasharray: 75.4;
+    stroke-dashoffset: 75.4;
+    transition: stroke-dashoffset 0.8s linear;
+  }
+
+  #wp-text {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+  }
+</style>
+</head>
+<body>
+
+<!-- Wallpaper layers -->
+<div class="bg-layer" id="bg-a"></div>
+<div class="bg-layer" id="bg-b"></div>
+
+<!-- Dim overlay -->
+<div class="overlay"></div>
+
+<!-- Clock stage -->
+<div id="stage">
+  <div id="time">
+    <span id="hh">12</span><span class="colon">:</span><span id="mm">00</span>
+  </div>
+
+  <div id="seconds-row">
+    <span id="seconds-label">sec</span>
+    <div id="sec-bar-track"><div id="sec-bar-fill"></div></div>
+    <span id="seconds-num">00</span>
+  </div>
+
+  <div id="date-row">
+    <span id="period">AM</span>
+    <span id="date">Monday, 1 January 2025</span>
+  </div>
+</div>
+
+<!-- Bottom-right info -->
+<div id="corner">
+  <div class="label">Wallpaper refreshes in</div>
+  <div class="value" id="wp-countdown">60s</div>
+</div>
+
+<!-- Bottom-left wallpaper ring -->
+<div id="wp-badge">
+  <svg id="wp-ring" viewBox="0 0 28 28">
+    <circle cx="14" cy="14" r="12"/>
+    <circle class="progress" id="ring-prog" cx="14" cy="14" r="12"/>
+  </svg>
+  <span id="wp-text">Photo refresh</span>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── Wallpaper ── */
+  const bgA = document.getElementById('bg-a');
+  const bgB = document.getElementById('bg-b');
+  const ringProg = document.getElementById('ring-prog');
+  const wpCountdown = document.getElementById('wp-countdown');
+  const REFRESH_INTERVAL = 60;  // seconds
+  const CIRCUMFERENCE = 75.4;   // 2π × 12
+
+  let activeLayer = 'a';
+  let wpSecondsLeft = REFRESH_INTERVAL;
+  let imgIndex = 0;
+
+  const CATEGORIES = [
+    'nature', 'landscape', 'mountain', 'ocean', 'forest',
+    'city', 'architecture', 'abstract', 'sky', 'aurora'
+  ];
+
+  function getImageUrl() {
+    const cat = CATEGORIES[imgIndex % CATEGORIES.length];
+    imgIndex++;
+    // Use picsum with a unique seed to avoid caching
+    return `https://picsum.photos/seed/${Date.now()}/1920/1080`;
+  }
+
+  function loadWallpaper() {
+    const url = getImageUrl();
+    const img = new Image();
+    img.onload = function () {
+      if (activeLayer === 'a') {
+        bgB.style.backgroundImage = `url('${url}')`;
+        bgB.style.opacity = '1';
+        bgA.style.opacity = '0';
+        activeLayer = 'b';
+      } else {
+        bgA.style.backgroundImage = `url('${url}')`;
+        bgA.style.opacity = '1';
+        bgB.style.opacity = '0';
+        activeLayer = 'a';
+      }
+    };
+    img.onerror = function () {
+      /* silently retry next cycle */
+    };
+    img.src = url;
+  }
+
+  /* initial wallpaper */
+  loadWallpaper();
+
+  function tickWallpaper() {
+    wpSecondsLeft--;
+    if (wpSecondsLeft <= 0) {
+      wpSecondsLeft = REFRESH_INTERVAL;
+      loadWallpaper();
+    }
+    wpCountdown.textContent = wpSecondsLeft + 's';
+
+    const progress = 1 - (wpSecondsLeft / REFRESH_INTERVAL);
+    const offset = CIRCUMFERENCE - progress * CIRCUMFERENCE;
+    ringProg.style.strokeDashoffset = offset.toFixed(2);
+  }
+
+  /* ── Clock ── */
+  const hhEl  = document.getElementById('hh');
+  const mmEl  = document.getElementById('mm');
+  const secFill = document.getElementById('sec-bar-fill');
+  const secNum  = document.getElementById('seconds-num');
+  const dateEl  = document.getElementById('date');
+  const periodEl = document.getElementById('period');
+
+  const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MONTHS = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function tickClock() {
+    const now  = new Date();
+    let h      = now.getHours();
+    const m    = now.getMinutes();
+    const s    = now.getSeconds();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+
+    hhEl.textContent  = pad2(h);
+    mmEl.textContent  = pad2(m);
+    secNum.textContent = pad2(s);
+    secFill.style.width = ((s / 59) * 100).toFixed(1) + '%';
+    periodEl.textContent = ampm;
+
+    const day = DAYS[now.getDay()];
+    const dt  = now.getDate();
+    const mon = MONTHS[now.getMonth()];
+    const yr  = now.getFullYear();
+    dateEl.textContent = `${day}, ${dt} ${mon} ${yr}`;
+  }
+
+  /* ── Screensaver drift ── */
+  const stage = document.getElementById('stage');
+  const MAX_X = 60, MAX_Y = 40;
+
+  function drift() {
+    const tx = (Math.random() * 2 - 1) * MAX_X;
+    const ty = (Math.random() * 2 - 1) * MAX_Y;
+    stage.style.transform = `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
+  }
+
+  drift();
+  setInterval(drift, 9000);
+
+  /* ── Main tick ── */
+  tickClock();
+  let wallpaperTick = 0;
+
+  setInterval(function () {
+    tickClock();
+    wallpaperTick++;
+    if (wallpaperTick >= 1) {
+      wallpaperTick = 0;
+      tickWallpaper();
+    }
+  }, 1000);
+
+  /* ── Fullscreen on tap (Android Chrome) ── */
+  document.addEventListener('click', function () {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) {
+      if (el.requestFullscreen) el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    }
+  }, { once: false });
+
+  /* ── Wake Lock (keep screen on if supported) ── */
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        await navigator.wakeLock.request('screen');
+      }
+    } catch (e) { /* not supported or denied */ }
+  }
+  requestWakeLock();
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') requestWakeLock();
+  });
+
+})();
+</script>
+</body>
+</html>
